@@ -2,22 +2,29 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neon Nexus - Final Balance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neon Nexus - Fullscreen</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; position: fixed; inset: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; touch-action: none; color: white; }
+        /* CSS Mobile Fix: Ensures the container matches the physical screen size */
+        body { 
+            margin: 0; padding: 0; background-color: #000; 
+            position: fixed; inset: 0; overflow: hidden; 
+            font-family: 'Segoe UI', sans-serif; touch-action: none; color: white;
+            height: 100vh; height: -webkit-fill-available;
+        }
         #gameContainer { position: relative; width: 100%; height: 100%; }
         canvas { display: block; width: 100%; height: 100%; }
+        
         .hud { position: absolute; z-index: 5; pointer-events: none; text-shadow: 0 2px 4px #000; font-weight: bold; }
         #scoreBoard { top: 20px; left: 20px; font-size: 24px; color: #0ff; }
         #hiScoreBoard { top: 20px; right: 20px; font-size: 18px; color: #f0f; opacity: 0.8; }
+        
         #energyContainer { top: 60px; left: 20px; width: 150px; height: 12px; background: rgba(255,255,255,0.1); border-radius: 6px; overflow: hidden; border: 1px solid rgba(0, 255, 0, 0.3); }
         #energyFill { width: 0%; height: 100%; background: linear-gradient(90deg, #050, #0f0); box-shadow: 0 0 15px #0f0; transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        
         #ui-layer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px); z-index: 10; text-align: center; }
         h1 { font-size: 10vw; color: #0ff; text-shadow: 0 0 25px #0ff; margin: 0; }
-        p { font-size: 18px; line-height: 1.6; color: #ccc; padding: 0 20px; }
-        button { padding: 18px 60px; font-size: 22px; background: none; color: #0ff; border: 2px solid #0ff; border-radius: 50px; cursor: pointer; transition: 0.3s; margin-top: 25px; font-weight: 900; text-transform: uppercase; outline: none; -webkit-tap-highlight-color: transparent; }
-        button:hover { background: rgba(0, 255, 255, 0.1); box-shadow: 0 0 20px #0ff; }
+        button { padding: 18px 60px; font-size: 22px; background: none; color: #0ff; border: 2px solid #0ff; border-radius: 50px; cursor: pointer; transition: 0.3s; margin-top: 25px; font-weight: 900; text-transform: uppercase; outline: none; }
         button:active { transform: scale(0.95); background: #0ff; color: #000; }
         .hidden { display: none !important; }
     </style>
@@ -28,7 +35,9 @@
         <div id="scoreBoard" class="hud">Score: 0</div>
         <div id="hiScoreBoard" class="hud">Best: 0</div>
         <div id="energyContainer" class="hud"><div id="energyFill"></div></div>
+        
         <canvas id="gameCanvas"></canvas>
+
         <div id="ui-layer">
             <h1 id="title">NEON NEXUS</h1>
             <p id="desc">ENERGY DECAYS OVER TIME.<br>Collect cells to activate Shield.</p>
@@ -44,7 +53,6 @@
     const hiScoreDisplay = document.getElementById('hiScoreBoard');
     const energyFill = document.getElementById('energyFill');
 
-    // Audio Context Setup
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     let audioCtx;
     let musicLoop = null;
@@ -61,8 +69,22 @@
     let shake = 0;
 
     const player = { x: 0, y: 0, size: 42, dx: 0, speed: 850, tilt: 0, shield: false, shieldTime: 0 };
+
     hiScoreDisplay.innerText = "Best: " + (localStorage.getItem('neonNexusHi') || 0);
 
+    // --- FULLSCREEN LOGIC ---
+    
+
+    function toggleFullscreen() {
+        const elem = document.documentElement;
+        if (!document.fullscreenElement) {
+            if (elem.requestFullscreen) elem.requestFullscreen();
+            else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+            else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+        }
+    }
+
+    // --- SOUND ENGINE ---
     function playSound(freq, type, duration, vol, rampUp = false) {
         if (!audioCtx) return;
         const osc = audioCtx.createOscillator();
@@ -84,13 +106,14 @@
         let beat = 0;
         musicLoop = setInterval(() => {
             if (isGameOver) { stopMusic(); return; }
-            playSound(60, 'sine', 0.2, 0.5, false); // KICK (Louder)
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            playSound(60, 'sine', 0.2, 0.45, false);
             if (beat % 2 === 0) {
                 const scale = [110, 130, 146]; 
                 const note = scale[Math.floor(Math.random() * scale.length)];
-                playSound(note, 'triangle', 0.4, 0.2, false); // BASS (Louder)
+                playSound(note, 'triangle', 0.4, 0.18, false);
             }
-            if (beat % 4 === 2) playSound(3500, 'sine', 0.05, 0.15, false); // HI-HAT
+            if (beat % 4 === 2) playSound(3500, 'sine', 0.05, 0.12, false);
             beat++;
         }, 250);
     }
@@ -196,10 +219,10 @@
             if (dist < 45) {
                 if (ent.type === 'cell') {
                     entities.splice(i, 1); energy = Math.min(energy + 2.2, MAX_ENERGY);
-                    playSound(650, 'sine', 0.2, 0.5, true); createExplosion(ent.x, ent.y, '#0f0');
-                    if (energy >= MAX_ENERGY) { player.shield = true; player.shieldTime = 4.5; energy = 0; playSound(1100, 'triangle', 0.4, 0.4, true); }
+                    playSound(650, 'sine', 0.2, 0.45, true); createExplosion(ent.x, ent.y, '#0f0');
+                    if (energy >= MAX_ENERGY) { player.shield = true; player.shieldTime = 4.5; energy = 0; playSound(1100, 'triangle', 0.4, 0.35, true); }
                 } else if (!player.shield) { gameOver(); }
-                else { entities.splice(i, 1); shake = 0.6; playSound(150, 'sawtooth', 0.1, 0.4, false); createExplosion(ent.x, ent.y, '#f0f'); }
+                else { entities.splice(i, 1); shake = 0.6; playSound(150, 'sawtooth', 0.1, 0.35, false); createExplosion(ent.x, ent.y, '#f0f'); }
             } else if (ent.y > canvas.height) { entities.splice(i, 1); score += 10; scoreDisplay.innerText = "Score: " + score; difficulty += 0.015; }
         }
         ctx.restore();
@@ -209,7 +232,7 @@
     function gameOver() {
         isGameOver = true; shake = 1.8;
         stopMusic();
-        playSound(70, 'sawtooth', 0.8, 0.7, false); 
+        playSound(70, 'sawtooth', 0.8, 0.65, false); 
         if (navigator.vibrate) navigator.vibrate([100, 50, 250]);
         const hiScore = localStorage.getItem('neonNexusHi') || 0;
         if (score > hiScore) localStorage.setItem('neonNexusHi', score);
@@ -219,14 +242,10 @@
     }
 
     function start() {
-        // ESSENTIAL FIX: Initialize context inside the user tap
-        if (!audioCtx) {
-            audioCtx = new AudioCtx();
-        }
-        // Force resume in case it's in a suspended state
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+        toggleFullscreen(); // ACTIVATE FULLSCREEN ON START
+        
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         
         isGameOver = false; score = 0; energy = 0; difficulty = 1; shake = 0;
         entities = []; particles = []; lastTime = 0; player.shield = false;
@@ -234,8 +253,7 @@
         scoreDisplay.innerText = "Score: 0";
         energyFill.style.width = '0%';
         ui.classList.add('hidden');
-        startBackgroundMusic(); 
-        spawn();
+        startBackgroundMusic(); spawn();
         requestAnimationFrame(update);
     }
 
